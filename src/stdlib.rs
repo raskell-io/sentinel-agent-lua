@@ -700,4 +700,9 @@ mod tests {
         assert!(match_result);
 
         let find_result = lua
-            .load(r#"return regex.find("\\d+", "
+            .load(r#"return regex.find("\\d+", "value: 42")"#)
+            .eval::<Option<String>>()
+            .unwrap();
+        assert_eq!(find_result, Some("42".to_string()));
+    }
+}
