@@ -1,0 +1,82 @@
+[package]
+name = "sentinel-agent-lua"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Sentinel Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/raskell-io/sentinel-agent-lua"
+homepage = "https://sentinel.raskell.io"
+documentation = "https://sentinel.raskell.io/docs/agents/lua"
+description = "Lua scripting agent for Sentinel reverse proxy - custom logic via Lua scripts"
+keywords = ["proxy", "reverse-proxy", "agent", "lua", "scripting"]
+categories = ["network-programming"]
+readme = "README.md"
+
+[[bin]]
+name = "sentinel-lua-agent"
+path = "src/main.rs"
+
+[dependencies]
+# Sentinel protocol
+sentinel-agent-protocol = "0.1"
+sentinel-common = "0.1"
+
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Lua runtime
+mlua = { version = "0.9", features = ["lua54", "vendored", "async", "serialize"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration parsing
+kdl = "4.6"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Crypto
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+base64 = "0.22"
+rand = "0.8"
+
+# Compression
+flate2 = "1.0"
+
+# Pattern matching
+regex = "1.10"
+
+# URL encoding
+percent-encoding = "2.3"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Bytes
+bytes = "1.7"
+
+# File watching
+notify = "6.1"
+
+# Command line
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# HTTP server for metrics
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace"] }
+
+[dev-dependencies]
+tempfile = "3.12"
