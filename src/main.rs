@@ -14,7 +14,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use sentinel_agent_protocol::{
-    AgentHandler, AgentResponse, AgentServer, AuditMetadata, HeaderOp,
+    AgentHandler, AgentResponse, AgentServer, AuditMetadata, ConfigureEvent, HeaderOp,
     RequestHeadersEvent, ResponseHeadersEvent,
 };
 
@@ -75,6 +75,18 @@ impl Default for ScriptResult {
     }
 }
 
+/// Configuration received via on_configure event
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct LuaConfigJson {
+    /// Inline Lua script content
+    #[serde(default)]
+    script: Option<String>,
+    /// Fail open on script errors
+    #[serde(default)]
+    fail_open: bool,
+}
+
 /// Lua agent
 pub struct LuaAgent {
     lua: Arc<RwLock<Lua>>,
@@ -102,6 +114,25 @@ impl LuaAgent {
             script_path,
             fail_open,
         })
+    }
+
+    /// Load a new Lua script from content string
+    fn load_script_content(&self, script_content: &str) -> Result<()> {
+        let mut lua = self.lua.blocking_write();
+
+        // Create a new Lua state
+        let new_lua = Lua::new();
+
+        // Load the script
+        new_lua.load(script_content)
+            .exec()
+            .map_err(|e| anyhow::anyhow!("Failed to load script: {}", e))?;
+
+        // Replace the old state with the new one
+        *lua = new_lua;
+
+        info!("Lua script loaded from configuration");
+        Ok(())
     }
 
     fn execute_request_script(&self, event: &RequestHeadersEvent) -> Result<ScriptResult> {
@@ -306,6 +337,44 @@ impl LuaAgent {
 
 #[async_trait::async_trait]
 impl AgentHandler for LuaAgent {
+    async fn on_configure(&self, event: ConfigureEvent) -> AgentResponse {
+        info!(
+            agent_id = %event.agent_id,
+            "Received configuration event"
+        );
+
+        // Parse the configuration
+        let config: LuaConfigJson = match serde_json::from_value(event.config) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Failed to parse configuration: {}", e);
+                return AgentResponse::block(500, Some(format!("Invalid configuration: {}", e)));
+            }
+        };
+
+        // Load script if provided in config
+        if let Some(script_content) = &config.script {
+            debug!("Loading Lua script from configuration");
+            if let Err(e) = self.load_script_content(script_content) {
+                error!("Failed to load Lua script from config: {}", e);
+                if config.fail_open {
+                    warn!("Failing open due to script load error");
+                    return AgentResponse::default_allow()
+                        .with_audit(AuditMetadata {
+                            tags: vec!["lua".to_string(), "config_error".to_string(), "fail_open".to_string()],
+                            reason_codes: vec![format!("SCRIPT_LOAD_ERROR: {}", e)],
+                            ..Default::default()
+                        });
+                } else {
+                    return AgentResponse::block(500, Some(format!("Failed to load script: {}", e)));
+                }
+            }
+            info!("Lua script loaded successfully from configuration");
+        }
+
+        AgentResponse::default_allow()
+    }
+
     async fn on_request_headers(&self, event: RequestHeadersEvent) -> AgentResponse {
         match self.execute_request_script(&event) {
             Ok(result) => {
