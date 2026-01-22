@@ -655,6 +655,7 @@ async fn handle_uds_connection(
 
     // Send handshake response
     let handshake_resp = UdsHandshakeResponse {
+        encoding: sentinel_agent_protocol::v2::UdsEncoding::Json,
         protocol_version: 2,
         capabilities: uds_caps,
         success: true,
